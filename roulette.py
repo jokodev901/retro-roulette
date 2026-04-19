@@ -4,14 +4,30 @@ import random
 import subprocess
 import sys
 
+from pynput import keyboard
+
 
 class RetroRoulette:
     def __init__(self, base_path: pathlib.Path = None):
+        self.listener = None
+        self.active = True
         self.base_path = base_path
         self.retroarch_exe = self._get_executable_path()
         self.playlist_path = self._get_playlist_path()
         self.current_proc: subprocess.Popen | None = None
         self.roms: list[dict[str, str]] = self._load_playlists()
+
+    def _on_press(self, key):
+        # Listen for keypress
+        try:
+            if key == keyboard.Key.f9:
+                self.launch_random()
+            elif key == keyboard.Key.f10:
+                self._kill_proc()
+                self.active = False
+
+        except AttributeError:
+            pass
 
     def _get_executable_path(self) -> pathlib.Path | str:
         """
@@ -70,6 +86,9 @@ class RetroRoulette:
                 print('Could not find retroarch.cfg in the provided directory.')
                 sys.exit(1)
 
+        # MacOS
+        # Linux
+
         return pathlib.Path('')
 
     def _load_playlists(self) -> list[dict[str, str]]:
@@ -109,6 +128,7 @@ class RetroRoulette:
 
         # Reload roms if list has been exhausted
         if not self.roms:
+            print("No remaining ROMs available in the playlists, reloading all playlists")
             self.roms = self._load_playlists()
 
         rand_index = random.randrange(len(self.roms))
@@ -123,18 +143,12 @@ class RetroRoulette:
         self.current_proc = subprocess.Popen(cmd)
 
     def run(self) -> None:
-        if not self.roms:
-            print("No remaining ROMs available in the playlists, reloading all playlists")
-            self.roms = self._load_playlists()
+        # Start listener tied to this instance
+        self.listener = keyboard.Listener(on_press=self._on_press)
+        self.listener.start()
 
-        while True:
-            user_input = input("Enter r to roll a new game or q to quit: ").strip().lower()
-
-            if user_input == 'q':
-                self._kill_proc()
-                break
-            elif user_input == 'r':
-                self.launch_random()
+        while self.active:
+            continue
 
 
 if __name__ == '__main__':
