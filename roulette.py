@@ -3,6 +3,8 @@ import pathlib
 import random
 import subprocess
 import sys
+import time
+import configparser
 
 from pynput import keyboard
 
@@ -17,17 +19,9 @@ class RetroRoulette:
         self.current_proc: subprocess.Popen | None = None
         self.roms: list[dict[str, str]] = self._load_playlists()
 
-    def _on_press(self, key):
-        # Listen for keypress
-        try:
-            if key == keyboard.Key.f9:
-                self.launch_random()
-            elif key == keyboard.Key.f10:
-                self._kill_proc()
-                self.active = False
-
-        except AttributeError:
-            pass
+    def _quit(self):
+        self._kill_proc()
+        self.active = False
 
     def _get_executable_path(self) -> pathlib.Path | str:
         """
@@ -69,7 +63,7 @@ class RetroRoulette:
             file = self.base_path.joinpath('retroarch.cfg')
 
             try:
-                with file.open('r', encoding='utf-8') as f:
+                with (file.open('r', encoding='utf-8') as f):
                     for line in f:
                         var = line.split(' = ')
 
@@ -77,7 +71,10 @@ class RetroRoulette:
                             pl_val = var[1].strip()
 
                             if pl_val.startswith('":'):
-                                pl_val = pl_val.replace(':', '').replace('"', '').replace('\\', '')
+                                pl_val = pl_val \
+                                    .replace(':', '') \
+                                    .replace('"', '') \
+                                    .replace('\\', '')
                                 return self.base_path.joinpath(pl_val)
 
                             return pathlib.Path(var[1].replace('"', ''))
@@ -102,10 +99,12 @@ class RetroRoulette:
 
                 for item in playlist.get('items', []):
                     core = item.get('core_path')
+                    label = item.get('label')
                     if core == 'DETECT':
                         core = default_core
 
                     roms.append({
+                        'label': label,
                         'core': core,
                         'path': item.get('path')
                     })
@@ -134,6 +133,8 @@ class RetroRoulette:
         rand_index = random.randrange(len(self.roms))
         rom_data = self.roms.pop(rand_index)
 
+        print(f"Now playing: {rom_data['label']}")
+
         cmd = [
             str(self.retroarch_exe),
             "-L", rom_data['core'],
@@ -143,15 +144,27 @@ class RetroRoulette:
         self.current_proc = subprocess.Popen(cmd)
 
     def run(self) -> None:
-        # Start listener tied to this instance
-        self.listener = keyboard.Listener(on_press=self._on_press)
+        print("Retro Roulette is now running, you may minimize this window")
+        print("Press ctrl+alt+r to roll a random game, or ctrl+alt+q to quit")
+
+        self.listener = keyboard.GlobalHotKeys({
+            '<ctrl>+<alt>+r': self.launch_random,
+            '<ctrl>+<alt>+q': self._quit,
+        })
         self.listener.start()
 
-        while self.active:
-            continue
+        try:
+            while self.active:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nProgram terminated")
+        finally:
+            self.listener.stop()
 
 
 if __name__ == '__main__':
-    path = pathlib.Path(r"C:\Retroarch")
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+    path = pathlib.Path(config['Retroarch']['path'])
     app = RetroRoulette(path)
     app.run()
