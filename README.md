@@ -1,5 +1,5 @@
 # Retro Roulette
-### WIP application for launching random games from a Retroarch installation
+### Launch random games from a Retroarch installation
 
 * Currently working on Windows only
 * Edit config.ini with Retroarch main directory path
